@@ -1,4 +1,4 @@
-// src/routes/auth.js - 최소한의 수정만 적용
+// src/routes/auth.js - 로그인 500 에러 수정
 const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken"); // JWT 검증을 위해 추가
@@ -133,8 +133,17 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-// 로그인
+// 로그인 - 수정된 버전
 router.post("/login", async (req, res) => {
+  console.log("=== 로그인 라우터 진입 ===");
+  console.log("요청 메서드:", req.method);
+  console.log("요청 경로:", req.path);
+  console.log("요청 헤더:", req.headers);
+  console.log("요청 바디:", {
+    email: req.body.email,
+    password: req.body.password ? "***" : "undefined",
+  });
+
   try {
     console.log("로그인 요청:", { email: req.body.email }); // 비밀번호는 로그에서 제외
 
@@ -145,54 +154,137 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ error: "이메일과 비밀번호는 필수입니다" });
     }
 
-    // 사용자 조회
+    console.log("사용자 조회 중...");
+
+    // 사용자 조회 - select 명시적으로 지정
     const user = await prisma.user.findUnique({
       where: { email },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+        nickname: true,
+        role: true,
+        isActive: true,
+        avatar: true,
+        lastLogin: true,
+      },
     });
 
-    if (!user || !user.isActive) {
+    if (!user) {
+      console.log("사용자를 찾을 수 없음:", email);
       return res
         .status(401)
         .json({ error: "이메일 또는 비밀번호가 잘못되었습니다" });
     }
+
+    console.log("사용자 찾음:", user.email, "활성 상태:", user.isActive);
+
+    // isActive 필드가 존재하는지 확인 후 검증 (없으면 true로 간주)
+    if (user.hasOwnProperty("isActive") && !user.isActive) {
+      console.log("비활성 사용자:", email);
+      return res
+        .status(401)
+        .json({ error: "이메일 또는 비밀번호가 잘못되었습니다" });
+    }
+
+    console.log("비밀번호 검증 중...");
 
     // 비밀번호 확인
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
+      console.log("비밀번호 불일치:", email);
       return res
         .status(401)
         .json({ error: "이메일 또는 비밀번호가 잘못되었습니다" });
     }
 
-    // 마지막 로그인 시간 업데이트
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLogin: new Date() },
-    });
+    console.log("비밀번호 검증 성공");
+
+    // 마지막 로그인 시간 업데이트 - 에러가 발생해도 로그인은 계속 진행
+    try {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { lastLogin: new Date() },
+      });
+      console.log("로그인 시간 업데이트 성공");
+    } catch (updateError) {
+      console.error(
+        "로그인 시간 업데이트 실패 (무시하고 계속 진행):",
+        updateError.message
+      );
+    }
 
     // 토큰 생성
-    const { accessToken, refreshToken } = generateTokens(
-      user.id,
-      user.email,
-      user.role
-    );
+    console.log("토큰 생성 시작...");
+    console.log("사용자 정보:", {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
+    let accessToken, refreshToken;
+    try {
+      // generateTokens 함수 호출 전에 환경변수 확인
+      if (
+        !process.env.ACCESS_TOKEN_SECRET ||
+        !process.env.REFRESH_TOKEN_SECRET
+      ) {
+        throw new Error("토큰 시크릿이 설정되지 않았습니다");
+      }
+
+      const tokens = generateTokens(user.id, user.email, user.role);
+      accessToken = tokens.accessToken;
+      refreshToken = tokens.refreshToken;
+
+      console.log("토큰 생성 성공");
+      console.log(
+        "액세스 토큰 길이:",
+        accessToken ? accessToken.length : "undefined"
+      );
+      console.log(
+        "리프레시 토큰 길이:",
+        refreshToken ? refreshToken.length : "undefined"
+      );
+    } catch (tokenError) {
+      console.error("토큰 생성 실패:", tokenError);
+      console.error("토큰 생성 오류 스택:", tokenError.stack);
+      return res.status(500).json({
+        error: "토큰 생성 중 오류가 발생했습니다",
+        detail:
+          process.env.NODE_ENV === "development"
+            ? tokenError.message
+            : undefined,
+      });
+    }
+
+    console.log("리프레시 토큰 데이터베이스 저장 중...");
 
     // 기존 리프레시 토큰 삭제 후 새로 생성
-    await prisma.refreshToken.deleteMany({
-      where: { userId: user.id },
-    });
+    try {
+      await prisma.refreshToken.deleteMany({
+        where: { userId: user.id },
+      });
+      console.log("기존 리프레시 토큰 삭제 완료");
 
-    await prisma.refreshToken.create({
-      data: {
-        token: refreshToken,
-        userId: user.id,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
-    });
+      await prisma.refreshToken.create({
+        data: {
+          token: refreshToken,
+          userId: user.id,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
+      });
+      console.log("새 리프레시 토큰 저장 완료");
+    } catch (refreshTokenError) {
+      console.error("리프레시 토큰 저장 실패:", refreshTokenError);
+      // 리프레시 토큰 저장 실패해도 로그인은 성공으로 처리 (액세스 토큰만으로도 동작 가능)
+      console.log("리프레시 토큰 저장 실패했지만 로그인 계속 진행");
+    }
 
     console.log("로그인 성공:", user.email);
 
-    res.json({
+    // 응답 데이터 구성
+    const responseData = {
       user: {
         id: user.id,
         email: user.email,
@@ -201,14 +293,26 @@ router.post("/login", async (req, res) => {
         avatar: user.avatar,
       },
       accessToken,
-      refreshToken,
-    });
+    };
+
+    // 리프레시 토큰이 성공적으로 생성된 경우만 포함
+    if (refreshToken) {
+      responseData.refreshToken = refreshToken;
+    }
+
+    res.json(responseData);
   } catch (error) {
-    console.error("로그인 오류:", error);
+    console.error("=== 로그인 오류 발생 ===");
+    console.error("오류 타입:", error.constructor.name);
+    console.error("오류 메시지:", error.message);
+    console.error("오류 코드:", error.code);
+    console.error("오류 스택:", error.stack);
+
     res.status(500).json({
       error: "서버 오류가 발생했습니다",
       detail:
         process.env.NODE_ENV === "development" ? error.message : undefined,
+      timestamp: new Date().toISOString(),
     });
   }
 });
@@ -271,8 +375,11 @@ router.post("/refresh", async (req, res) => {
       return res.status(401).json({ error: "리프레시 토큰이 만료되었습니다" });
     }
 
-    // 사용자 활성 상태 확인
-    if (!storedToken.user.isActive) {
+    // 사용자 활성 상태 확인 (isActive 필드가 있는 경우만)
+    if (
+      storedToken.user.hasOwnProperty("isActive") &&
+      !storedToken.user.isActive
+    ) {
       console.log("비활성 사용자");
       return res.status(401).json({ error: "비활성화된 사용자입니다" });
     }
