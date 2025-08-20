@@ -24,15 +24,18 @@ services:
       --collation-server=utf8mb4_unicode_ci
     healthcheck:
       test:
-        [
-          "CMD",
-          "mysqladmin",
-          "ping",
-          "-h",
-          "localhost",
-          "-uroot",
-          "-prootpassword",
-        ]
+        test:
+          [
+            "CMD",
+            "mysqladmin",
+            "ping",
+            "-h",
+            "127.0.0.1",
+            "-P",
+            "3306",
+            "-uroot",
+            "-prootpassword",
+          ]
       interval: 10s
       timeout: 5s
       retries: 6
@@ -49,8 +52,8 @@ services:
       SHADOW_DATABASE_URL: mysql://root:rootpassword@mysql:3306/team_collaboration_shadow
 
       # 🔐 시크릿 (기본값 넣어 오류 방지; 운영땐 .env로 반드시 교체)
-      ACCESS_TOKEN_SECRET: "${ACCESS_TOKEN_SECRET:-change_me_access_prod}"
-      REFRESH_TOKEN_SECRET: "${REFRESH_TOKEN_SECRET:-change_me_refresh_prod}"
+      JWT_SECRET: "${JWT_SECRET:-your-super-secret-jwt-key-for-access-tokens-change-this-in-production-2024}"
+      REFRESH_TOKEN_SECRET: "${REFRESH_TOKEN_SECRET:-your-super-secret-jwt-key-for-refresh-tokens-change-this-in-production-2024}"
 
       # 토큰 만료(선택)
       ACCESS_TOKEN_EXPIRY: 15m

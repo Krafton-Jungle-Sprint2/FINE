@@ -226,10 +226,11 @@ router.post("/login", async (req, res) => {
     let accessToken, refreshToken;
     try {
       // generateTokens 함수 호출 전에 환경변수 확인
-      if (
-        !process.env.ACCESS_TOKEN_SECRET ||
-        !process.env.REFRESH_TOKEN_SECRET
-      ) {
+      if (!process.env.JWT_SECRET || !process.env.REFRESH_TOKEN_SECRET) {
+        console.error("환경 변수 확인:", {
+          JWT_SECRET: !!process.env.JWT_SECRET,
+          REFRESH_TOKEN_SECRET: !!process.env.REFRESH_TOKEN_SECRET,
+        });
         throw new Error("토큰 시크릿이 설정되지 않았습니다");
       }
 
