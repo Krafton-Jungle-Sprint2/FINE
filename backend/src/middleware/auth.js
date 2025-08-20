@@ -1,8 +1,6 @@
 // src/middleware/auth.js - 인증 미들웨어 강화 (설정 호환성 개선)
 const jwt = require("jsonwebtoken");
-const { PrismaClient } = require("@prisma/client");
-
-const prisma = new PrismaClient();
+const { prisma } = require("../config/database"); // 🔥 수정: PrismaClient 직접 생성 대신 database.js에서 가져오기
 
 // 설정 호환성을 위한 함수
 const getJWTSecret = () => {
@@ -25,8 +23,8 @@ const getJWTSecret = () => {
     return {
       accessSecret: process.env.ACCESS_TOKEN_SECRET || process.env.JWT_SECRET,
       refreshSecret: process.env.REFRESH_TOKEN_SECRET,
-      accessExpiry: "15m",
-      refreshExpiry: "7d",
+      accessExpiry: process.env.ACCESS_TOKEN_EXPIRY || "15m", // 🔥 수정: 환경변수에서 가져오기
+      refreshExpiry: process.env.REFRESH_TOKEN_EXPIRY || "7d", // 🔥 수정: 환경변수에서 가져오기
     };
   }
 };
@@ -50,7 +48,8 @@ const generateTokens = (userId, email, role) => {
     // 환경 변수 검증
     if (!jwtConfig.accessSecret || !jwtConfig.refreshSecret) {
       const missingSecrets = [];
-      if (!jwtConfig.accessSecret) missingSecrets.push("ACCESS_TOKEN_SECRET");
+      if (!jwtConfig.accessSecret)
+        missingSecrets.push("ACCESS_TOKEN_SECRET 또는 JWT_SECRET");
       if (!jwtConfig.refreshSecret) missingSecrets.push("REFRESH_TOKEN_SECRET");
 
       throw new Error(
@@ -144,7 +143,9 @@ const authenticateToken = (req, res, next) => {
 
     // JWT 시크릿 검증
     if (!jwtConfig.accessSecret) {
-      console.error("ACCESS_TOKEN_SECRET이 설정되지 않았습니다.");
+      console.error(
+        "ACCESS_TOKEN_SECRET 또는 JWT_SECRET이 설정되지 않았습니다."
+      );
       return res.status(500).json({
         error: "서버 설정 오류",
         code: "SERVER_CONFIG_ERROR",
@@ -153,7 +154,7 @@ const authenticateToken = (req, res, next) => {
 
     console.log("JWT 검증 시작...");
 
-    // 액세스 토큰은 ACCESS_TOKEN_SECRET으로 검증합니다.
+    // 액세스 토큰은 ACCESS_TOKEN_SECRET 또는 JWT_SECRET으로 검증합니다.
     jwt.verify(token, jwtConfig.accessSecret, (err, user) => {
       if (err) {
         console.log("JWT 검증 실패:", err.message);
@@ -220,10 +221,13 @@ const checkWorkspaceMember = async (req, res, next) => {
       });
     }
 
+    // 🔥 수정: wsId를 정수로 변환 (필요시)
+    const workspaceId = isNaN(wsId) ? wsId : parseInt(wsId);
+
     // 소유자 확인
     console.log("워크스페이스 소유자 확인 중...");
     const workspace = await prisma.workspace.findFirst({
-      where: { id: wsId, ownerId: userId },
+      where: { id: workspaceId, ownerId: userId },
     });
 
     if (workspace) {
@@ -236,7 +240,7 @@ const checkWorkspaceMember = async (req, res, next) => {
     console.log("워크스페이스 멤버 확인 중...");
     const member = await prisma.workspaceMember.findFirst({
       where: {
-        workspaceId: wsId,
+        workspaceId: workspaceId,
         userId: userId,
         accepted: true,
       },
@@ -291,8 +295,11 @@ const checkWorkspaceOwner = async (req, res, next) => {
       });
     }
 
+    // 🔥 수정: wsId를 정수로 변환 (필요시)
+    const workspaceId = isNaN(wsId) ? wsId : parseInt(wsId);
+
     const workspace = await prisma.workspace.findFirst({
-      where: { id: wsId, ownerId: userId },
+      where: { id: workspaceId, ownerId: userId },
     });
 
     if (!workspace) {
