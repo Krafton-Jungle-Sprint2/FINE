@@ -42,19 +42,23 @@ services:
     restart: unless-stopped
     environment:
       TZ: Asia/Seoul
-      # Root 사용자 사용 (Shadow DB 문제 해결)
+      # DB
       DATABASE_URL: mysql://root:rootpassword@mysql:3306/team_collaboration
       SHADOW_DATABASE_URL: mysql://root:rootpassword@mysql:3306/team_collaboration_shadow
-      # 강력한 JWT 시크릿 키 (최소 32자)
-      JWT_SECRET: your-super-secret-jwt-key-for-access-tokens-change-this-in-production-2024
-      REFRESH_TOKEN_SECRET: your-super-secret-jwt-key-for-refresh-tokens-change-this-in-production-2024
+
+      # 🔐 JWT Secrets (라우터/미들웨어 명칭과 일치)
+      ACCESS_TOKEN_SECRET: "${ACCESS_TOKEN_SECRET:?set ACCESS_TOKEN_SECRET in .env}"
+      REFRESH_TOKEN_SECRET: "${REFRESH_TOKEN_SECRET:?set REFRESH_TOKEN_SECRET in .env}"
+
+      # 만료시간(선택: 미들웨어에서 기본값 15m/7d)
       ACCESS_TOKEN_EXPIRY: 15m
       REFRESH_TOKEN_EXPIRY: 7d
+
+      # 기타
       API_PORT: 4000
       SOCKET_PORT: 5000
       NODE_ENV: development
       FRONTEND_URL: http://localhost:5173
-      # 데이터베이스 연결 풀 설정
       DATABASE_POOL_SIZE: 10
       DATABASE_CONNECTION_TIMEOUT: 30000
       DATABASE_QUERY_TIMEOUT: 30000
