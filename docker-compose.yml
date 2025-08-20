@@ -52,8 +52,9 @@ services:
       SHADOW_DATABASE_URL: mysql://root:rootpassword@mysql:3306/team_collaboration_shadow
 
       # 🔐 시크릿 (운영에선 .env로 반드시 교체)
-      ACCESS_TOKEN_SECRET: "${ACCESS_TOKEN_SECRET:-change_me_access_prod}"
-      REFRESH_TOKEN_SECRET: "${REFRESH_TOKEN_SECRET:-change_me_refresh_prod}"
+      JWT_SECRET: "${JWT_SECRET:-change_me_jwt_compat}" # 부트스트랩이 요구
+      ACCESS_TOKEN_SECRET: "${ACCESS_TOKEN_SECRET:-change_me_access}" # 라우터/미들웨어 용
+      REFRESH_TOKEN_SECRET: "${REFRESH_TOKEN_SECRET:-change_me_refresh}"
 
       # 토큰 만료(선택)
       ACCESS_TOKEN_EXPIRY: 15m
