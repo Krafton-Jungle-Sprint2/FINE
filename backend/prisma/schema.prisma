@@ -26,6 +26,7 @@ model User {
   workspaceMembers       WorkspaceMember[]
   ownedWorkspaces        Workspace[]       @relation("WorkspaceOwner")
   chatNotifications      ChatNotification[]
+  profile                UserProfile?
 
   @@map("users")
 }
@@ -79,6 +80,7 @@ model Workspace {
   members      WorkspaceMember[]
   owner        User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   chatNotifications ChatNotification[]
+  settings     WorkspaceSettings?
 
   @@index([ownerId])
   @@map("workspaces")
@@ -163,4 +165,37 @@ model RefreshToken {
   @@index([userId])
   @@index([expiresAt])
   @@map("refresh_tokens")
+}
+
+model UserProfile {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  bio        String?  @db.Text
+  location   String?
+  website    String?
+  company    String?
+  jobTitle   String?
+  skills     Json?
+  preferences Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model WorkspaceSettings {
+  id            String   @id @default(uuid())
+  workspaceId   String   @unique
+  theme         String   @default("light")
+  notifications Json     @default("{\"email\": true, \"push\": true, \"chat\": true}")
+  privacy       String   @default("private")
+  allowInvites  Boolean  @default(true)
+  maxMembers    Int      @default(100)
+  customFields  Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_settings")
 }
