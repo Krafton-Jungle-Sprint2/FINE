@@ -1,7 +1,5 @@
 version: "3.8"
 
-name: fine
-
 services:
   mysql:
     image: mysql:8.0
