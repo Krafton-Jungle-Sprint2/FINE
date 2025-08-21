@@ -11,6 +11,7 @@ const todosRouter = require("./routes/todos");
 const workspacesRouter = require("./routes/workspaces");
 const tasksRouter = require("./routes/tasks");
 const adminRouter = require("./routes/admin");
+const chatRouter = require("./routes/chat");
 
 const app = express();
 
@@ -44,6 +45,7 @@ app.get("/", (req, res) => {
       friends: "/friends/*",
       todos: "/me/todos/*",
       workspaces: "/workspaces/*",
+      chat: "/chat/*",
       admin: "/admin/*",
     },
   });
@@ -56,6 +58,7 @@ app.use("/friends", friendsRouter);
 app.use("/me/todos", todosRouter);
 app.use("/workspaces", workspacesRouter);
 app.use("/workspaces/:wsId/tasks", tasksRouter); // 워크스페이스별 Task
+app.use("/chat", chatRouter);
 app.use("/admin", adminRouter);
 
 // 간단한 헬스체크 (Docker 헬스체크용)

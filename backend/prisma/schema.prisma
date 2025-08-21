@@ -35,6 +35,9 @@ model User {
   // 워크스페이스 멤버
   workspaceMembers WorkspaceMember[]
   
+  // 채팅 메시지
+  chatMessages ChatMessage[]
+  
   // 리프레시 토큰
   refreshTokens RefreshToken[]
   
@@ -97,6 +100,7 @@ model Workspace {
   owner   User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   members WorkspaceMember[]
   tasks   GroupTask[]
+  chatMessages ChatMessage[]
   
   @@index([ownerId])
   @@map("workspaces")
@@ -142,6 +146,24 @@ model GroupTask {
   @@index([startDate])
   @@index([dueDate])
   @@map("group_tasks")
+}
+
+// 워크스페이스 채팅 메시지 테이블
+model ChatMessage {
+  id          String   @id @default(uuid())
+  workspaceId String
+  userId      String   // 작성자 ID
+  content     String   @db.Text
+  createdAt   DateTime @default(now())
+  
+  // 관계
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("chat_messages")
 }
 
 // 리프레시 토큰 테이블

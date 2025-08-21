@@ -225,6 +225,17 @@ router.post(
         return res.status(400).json({ error: "사용자 ID가 필요합니다" });
       }
 
+      // 워크스페이스 존재 확인
+      const workspace = await prisma.workspace.findUnique({
+        where: { id: wsId },
+      });
+
+      if (!workspace) {
+        return res
+          .status(404)
+          .json({ error: "워크스페이스를 찾을 수 없습니다" });
+      }
+
       const targetUser = await prisma.user.findUnique({
         where: { id: user_id },
       });
@@ -258,6 +269,86 @@ router.post(
       res.status(201).json(member);
     } catch (error) {
       console.error("워크스페이스 멤버 초대 오류:", error);
+      res.status(500).json({ error: "멤버 초대에 실패했습니다" });
+    }
+  }
+);
+
+// 이메일로 워크스페이스 멤버 초대
+router.post(
+  "/:wsId/members/invite-by-email",
+  authenticateToken,
+  checkWorkspaceOwner,
+  async (req, res) => {
+    try {
+      const { wsId } = req.params;
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ error: "이메일이 필요합니다" });
+      }
+
+      // 이메일 형식 검증
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ error: "유효한 이메일 형식이 아닙니다" });
+      }
+
+      // 워크스페이스 존재 확인
+      const workspace = await prisma.workspace.findUnique({
+        where: { id: wsId },
+      });
+
+      if (!workspace) {
+        return res
+          .status(404)
+          .json({ error: "워크스페이스를 찾을 수 없습니다" });
+      }
+
+      // 이메일로 사용자 찾기
+      const targetUser = await prisma.user.findUnique({
+        where: { email: email },
+      });
+
+      if (!targetUser) {
+        return res
+          .status(404)
+          .json({ error: "해당 이메일로 가입된 사용자를 찾을 수 없습니다" });
+      }
+
+      // 소유자 자신을 초대하려는 경우
+      if (targetUser.id === req.user.userId) {
+        return res
+          .status(400)
+          .json({ error: "자기 자신을 초대할 수 없습니다" });
+      }
+
+      // 이미 워크스페이스 멤버인지 확인
+      const existingMember = await prisma.workspaceMember.findFirst({
+        where: { workspaceId: wsId, userId: targetUser.id },
+      });
+
+      if (existingMember) {
+        return res.status(400).json({ error: "이미 워크스페이스 멤버입니다" });
+      }
+
+      // 멤버 초대 생성
+      const member = await prisma.workspaceMember.create({
+        data: { workspaceId: wsId, userId: targetUser.id },
+        include: {
+          user: {
+            select: { id: true, nickname: true, avatar: true, email: true },
+          },
+          workspace: { select: { id: true, name: true } },
+        },
+      });
+
+      res.status(201).json({
+        message: "멤버 초대가 완료되었습니다",
+        member: member,
+      });
+    } catch (error) {
+      console.error("이메일로 워크스페이스 멤버 초대 오류:", error);
       res.status(500).json({ error: "멤버 초대에 실패했습니다" });
     }
   }
