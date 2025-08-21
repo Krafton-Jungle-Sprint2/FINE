@@ -12,7 +12,7 @@ services:
       MYSQL_PASSWORD: teampassword
       MYSQL_ROOT_HOST: "%"
     ports:
-      - "3307:3306"
+      - "3306:3306" # 외부(호스트) 3306, 내부는 항상 3306
     volumes:
       - mysql_data:/var/lib/mysql
       - ./mysql-init:/docker-entrypoint-initdb.d
@@ -23,18 +23,11 @@ services:
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
     healthcheck:
-      # ✅ test는 한 번만, TCP로 핑
+      # ✅ 내부 포트 3306 기준으로 핑
       test:
         [
-          "CMD",
-          "mysqladmin",
-          "ping",
-          "-h",
-          "127.0.0.1",
-          "-P",
-          "3307",
-          "-uroot",
-          "-prootpassword",
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -prootpassword",
         ]
       interval: 10s
       timeout: 5s
@@ -47,20 +40,15 @@ services:
     restart: unless-stopped
     environment:
       TZ: Asia/Seoul
-      # DB
       DATABASE_URL: mysql://root:rootpassword@mysql:3306/team_collaboration
       SHADOW_DATABASE_URL: mysql://root:rootpassword@mysql:3306/team_collaboration_shadow
 
-      # 🔐 시크릿 (운영에선 .env로 반드시 교체)
-      JWT_SECRET: "${JWT_SECRET:-change_me_jwt_compat}" # 부트스트랩이 요구
-      ACCESS_TOKEN_SECRET: "${ACCESS_TOKEN_SECRET:-change_me_access}" # 라우터/미들웨어 용
+      JWT_SECRET: "${JWT_SECRET:-change_me_jwt_compat}"
+      ACCESS_TOKEN_SECRET: "${ACCESS_TOKEN_SECRET:-change_me_access}"
       REFRESH_TOKEN_SECRET: "${REFRESH_TOKEN_SECRET:-change_me_refresh}"
 
-      # 토큰 만료(선택)
       ACCESS_TOKEN_EXPIRY: 15m
       REFRESH_TOKEN_EXPIRY: 7d
-
-      # 기타
       API_PORT: 4000
       SOCKET_PORT: 5000
       NODE_ENV: production
@@ -84,6 +72,12 @@ services:
         npx prisma migrate deploy &&
         node src/index.js
       "
+    # (선택) 임시 헬스체크: 서비스 계속 unhealthy로 막히는 경우에만 켜기
+    # healthcheck:
+    #   test: ["CMD-SHELL", "exit 0"]
+    #   interval: 10s
+    #   timeout: 3s
+    #   retries: 1
     logging:
       driver: "json-file"
       options:
@@ -106,8 +100,8 @@ services:
     networks:
       - team_network
     depends_on:
-      - mysql
-      - backend
+      mysql:
+        condition: service_healthy
     command:
       [
         "sh",
