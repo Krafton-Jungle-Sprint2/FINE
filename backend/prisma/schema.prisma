@@ -122,8 +122,8 @@ model GroupTask {
 
 model ChatMessage {
   id          String    @id @default(uuid()) @db.VarChar(36)
-  workspaceId String    @db.VarChar(36)
-  userId      String    @db.VarChar(36)
+  workspaceId String    
+  userId      String    
   content     String    @db.Text
   createdAt   DateTime  @default(now())
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)

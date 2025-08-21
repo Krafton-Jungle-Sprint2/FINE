@@ -1,8 +1,8 @@
 -- CreateTable
 CREATE TABLE `chat_messages` (
-    `id` VARCHAR(36) NOT NULL,
-    `workspaceId` VARCHAR(36) NOT NULL,
-    `userId` VARCHAR(36) NOT NULL,
+    `id` VARCHAR(191) NOT NULL,
+    `workspaceId` VARCHAR(191) NOT NULL,
+    `userId` VARCHAR(191) NOT NULL,
     `content` TEXT NOT NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
