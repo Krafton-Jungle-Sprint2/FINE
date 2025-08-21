@@ -46,7 +46,7 @@ services:
     restart: unless-stopped
     environment:
       TZ: Asia/Seoul
-      DATABASE_URL: mysql://teamuser:teampassword@mysql:3306/team_collaboration_dev
+      DATABASE_URL: mysql://teamuser:teampassword@mysql:/team_collaboration_dev
       SHADOW_DATABASE_URL: mysql://root:rootpassword@mysql:3306/team_collaboration_shadow_dev
 
       # 🔥 dev 기본값(루트 .env 없을 때도 구동되게) - JWT_SECRET 추가

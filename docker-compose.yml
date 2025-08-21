@@ -32,7 +32,7 @@ services:
           "-h",
           "127.0.0.1",
           "-P",
-          "3306",
+          "3307",
           "-uroot",
           "-prootpassword",
         ]
@@ -48,8 +48,8 @@ services:
     environment:
       TZ: Asia/Seoul
       # DB
-      DATABASE_URL: mysql://root:rootpassword@mysql:3306/team_collaboration
-      SHADOW_DATABASE_URL: mysql://root:rootpassword@mysql:3306/team_collaboration_shadow
+      DATABASE_URL: mysql://root:rootpassword@mysql:3307/team_collaboration
+      SHADOW_DATABASE_URL: mysql://root:rootpassword@mysql:3307/team_collaboration_shadow
 
       # 🔐 시크릿 (운영에선 .env로 반드시 교체)
       JWT_SECRET: "${JWT_SECRET:-change_me_jwt_compat}" # 부트스트랩이 요구
@@ -95,7 +95,7 @@ services:
     working_dir: /app
     environment:
       TZ: Asia/Seoul
-      DATABASE_URL: mysql://root:rootpassword@mysql:3306/team_collaboration
+      DATABASE_URL: mysql://root:rootpassword@mysql:3307/team_collaboration
       NODE_ENV: production
     volumes:
       - ./backend:/app
