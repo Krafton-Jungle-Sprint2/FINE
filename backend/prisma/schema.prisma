@@ -25,6 +25,7 @@ model User {
   refreshTokens          RefreshToken[]
   workspaceMembers       WorkspaceMember[]
   ownedWorkspaces        Workspace[]       @relation("WorkspaceOwner")
+  chatNotifications      ChatNotification[]
 
   @@map("users")
 }
@@ -77,6 +78,7 @@ model Workspace {
   tasks        GroupTask[]
   members      WorkspaceMember[]
   owner        User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  chatNotifications ChatNotification[]
 
   @@index([ownerId])
   @@map("workspaces")
@@ -131,6 +133,23 @@ model ChatMessage {
   @@index([userId], map: "idx_userId")
   @@index([workspaceId], map: "idx_workspaceId")
   @@map("chat_messages")
+}
+
+model ChatNotification {
+  id          String   @id @default(uuid())
+  userId      String
+  workspaceId String
+  unreadCount Int      @default(0)
+  lastReadAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([userId])
+  @@index([workspaceId])
+  @@map("chat_notifications")
 }
 
 model RefreshToken {

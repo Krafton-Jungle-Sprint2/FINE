@@ -108,6 +108,48 @@ router.post("/workspace/:workspaceId", auth, async (req, res) => {
       },
     });
 
+    // 모든 워크스페이스 멤버의 읽지 않은 메시지 개수 증가 (메시지 작성자 제외)
+    const workspaceMembers = await prisma.workspaceMember.findMany({
+      where: {
+        workspaceId,
+        accepted: true,
+        userId: { not: req.user.id }, // 메시지 작성자 제외
+      },
+    });
+
+    // 워크스페이스 소유자도 포함 (메시지 작성자가 소유자가 아닌 경우)
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { ownerId: true },
+    });
+
+    const allMembers = [...workspaceMembers];
+    if (workspace.ownerId !== req.user.id) {
+      allMembers.push({ userId: workspace.ownerId });
+    }
+
+    // 각 멤버의 읽지 않은 메시지 개수 업데이트
+    for (const member of allMembers) {
+      await prisma.chatNotification.upsert({
+        where: {
+          userId_workspaceId: {
+            userId: member.userId,
+            workspaceId: workspaceId,
+          },
+        },
+        update: {
+          unreadCount: {
+            increment: 1,
+          },
+        },
+        create: {
+          userId: member.userId,
+          workspaceId: workspaceId,
+          unreadCount: 1,
+        },
+      });
+    }
+
     res.status(201).json(message);
   } catch (error) {
     console.error("채팅 메시지 전송 오류:", error);
@@ -153,6 +195,52 @@ router.delete("/message/:messageId", auth, async (req, res) => {
     await prisma.chatMessage.delete({
       where: { id: messageId },
     });
+
+    // 메시지 삭제 후 모든 멤버의 읽지 않은 메시지 개수 재계산
+    const workspaceMembers = await prisma.workspaceMember.findMany({
+      where: {
+        workspaceId: message.workspaceId,
+        accepted: true,
+      },
+    });
+
+    // 워크스페이스 소유자도 포함
+    const allMembers = [
+      ...workspaceMembers,
+      { userId: message.workspace.ownerId },
+    ];
+
+    for (const member of allMembers) {
+      // 해당 사용자가 마지막으로 읽은 시간 이후의 메시지 개수 계산
+      const notification = await prisma.chatNotification.findUnique({
+        where: {
+          userId_workspaceId: {
+            userId: member.userId,
+            workspaceId: message.workspaceId,
+          },
+        },
+      });
+
+      if (notification) {
+        const lastReadAt = notification.lastReadAt;
+        const unreadCount = await prisma.chatMessage.count({
+          where: {
+            workspaceId: message.workspaceId,
+            createdAt: { gt: lastReadAt },
+          },
+        });
+
+        await prisma.chatNotification.update({
+          where: {
+            userId_workspaceId: {
+              userId: member.userId,
+              workspaceId: message.workspaceId,
+            },
+          },
+          data: { unreadCount },
+        });
+      }
+    }
 
     res.json({ message: "메시지가 삭제되었습니다." });
   } catch (error) {
@@ -232,6 +320,109 @@ router.get("/workspace/:workspaceId/search", auth, async (req, res) => {
   } catch (error) {
     console.error("채팅 메시지 검색 오류:", error);
     res.status(500).json({ error: "메시지 검색에 실패했습니다." });
+  }
+});
+
+// 워크스페이스 채팅 메시지 읽음 처리
+router.post("/workspace/:workspaceId/read", auth, async (req, res) => {
+  try {
+    const { workspaceId } = req.params;
+    const userId = req.user.id;
+
+    // 워크스페이스 멤버인지 확인
+    const member = await prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId,
+        userId: userId,
+        accepted: true,
+      },
+    });
+
+    const isOwner = await prisma.workspace.findFirst({
+      where: {
+        id: workspaceId,
+        ownerId: userId,
+      },
+    });
+
+    if (!member && !isOwner) {
+      return res
+        .status(403)
+        .json({ error: "워크스페이스에 접근할 권한이 없습니다." });
+    }
+
+    // 읽지 않은 메시지 개수를 0으로 초기화하고 마지막 읽은 시간 업데이트
+    await prisma.chatNotification.upsert({
+      where: {
+        userId_workspaceId: {
+          userId: userId,
+          workspaceId: workspaceId,
+        },
+      },
+      update: {
+        unreadCount: 0,
+        lastReadAt: new Date(),
+      },
+      create: {
+        userId: userId,
+        workspaceId: workspaceId,
+        unreadCount: 0,
+        lastReadAt: new Date(),
+      },
+    });
+
+    res.json({ message: "채팅 메시지가 읽음 처리되었습니다." });
+  } catch (error) {
+    console.error("채팅 메시지 읽음 처리 오류:", error);
+    res.status(500).json({ error: "읽음 처리에 실패했습니다." });
+  }
+});
+
+// 워크스페이스별 읽지 않은 채팅 메시지 개수 조회
+router.get("/workspace/:workspaceId/unread-count", auth, async (req, res) => {
+  try {
+    const { workspaceId } = req.params;
+    const userId = req.user.id;
+
+    // 워크스페이스 멤버인지 확인
+    const member = await prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId,
+        userId: userId,
+        accepted: true,
+      },
+    });
+
+    const isOwner = await prisma.workspace.findFirst({
+      where: {
+        id: workspaceId,
+        ownerId: userId,
+      },
+    });
+
+    if (!member && !isOwner) {
+      return res
+        .status(403)
+        .json({ error: "워크스페이스에 접근할 권한이 없습니다." });
+    }
+
+    // 읽지 않은 메시지 개수 조회
+    const notification = await prisma.chatNotification.findUnique({
+      where: {
+        userId_workspaceId: {
+          userId: userId,
+          workspaceId: workspaceId,
+        },
+      },
+      select: { unreadCount: true },
+    });
+
+    res.json({ unreadCount: notification?.unreadCount || 0 });
+  } catch (error) {
+    console.error("읽지 않은 메시지 개수 조회 오류:", error);
+    res
+      .status(500)
+      .json({ error: "읽지 않은 메시지 개수 조회에 실패했습니다." });
   }
 });
 

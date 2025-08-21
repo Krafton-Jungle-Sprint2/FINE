@@ -30,6 +30,16 @@ router.post("/", authenticateToken, async (req, res) => {
       },
     });
 
+    // 워크스페이스 소유자의 채팅 알림 레코드 생성
+    await prisma.chatNotification.create({
+      data: {
+        userId: req.user.userId,
+        workspaceId: workspace.id,
+        unreadCount: 0,
+        lastReadAt: new Date(),
+      },
+    });
+
     res.status(201).json(workspace);
   } catch (error) {
     console.error("워크스페이스 생성 오류:", error);
@@ -47,6 +57,10 @@ router.get("/", authenticateToken, async (req, res) => {
       include: {
         owner: { select: { id: true, nickname: true, avatar: true } },
         _count: { select: { members: true, tasks: true } },
+        chatNotifications: {
+          where: { userId: userId },
+          select: { unreadCount: true },
+        },
       },
     });
 
@@ -57,16 +71,26 @@ router.get("/", authenticateToken, async (req, res) => {
           include: {
             owner: { select: { id: true, nickname: true, avatar: true } },
             _count: { select: { members: true, tasks: true } },
+            chatNotifications: {
+              where: { userId: userId },
+              select: { unreadCount: true },
+            },
           },
         },
       },
     });
 
     const result = [
-      ...ownedWorkspaces.map((ws) => ({ ...ws, role: "owner" })),
+      ...ownedWorkspaces.map((ws) => ({
+        ...ws,
+        role: "owner",
+        unreadChatCount: ws.chatNotifications[0]?.unreadCount || 0,
+      })),
       ...memberWorkspaces.map((member) => ({
         ...member.workspace,
         role: "member",
+        unreadChatCount:
+          member.workspace.chatNotifications[0]?.unreadCount || 0,
       })),
     ];
 
@@ -85,6 +109,7 @@ router.get(
   async (req, res) => {
     try {
       const { wsId } = req.params;
+      const userId = req.user.userId;
 
       const workspace = await prisma.workspace.findUnique({
         where: { id: wsId },
@@ -96,6 +121,10 @@ router.get(
             },
           },
           _count: { select: { tasks: true } },
+          chatNotifications: {
+            where: { userId: userId },
+            select: { unreadCount: true },
+          },
         },
       });
 
@@ -105,7 +134,13 @@ router.get(
           .json({ error: "워크스페이스를 찾을 수 없습니다" });
       }
 
-      res.json(workspace);
+      // 읽지 않은 채팅 메시지 개수 추가
+      const result = {
+        ...workspace,
+        unreadChatCount: workspace.chatNotifications[0]?.unreadCount || 0,
+      };
+
+      res.json(result);
     } catch (error) {
       console.error("워크스페이스 상세 조회 오류:", error);
       res.status(500).json({ error: "워크스페이스 조회에 실패했습니다" });
@@ -266,6 +301,16 @@ router.post(
         },
       });
 
+      // 새 멤버의 채팅 알림 레코드 생성
+      await prisma.chatNotification.create({
+        data: {
+          userId: user_id,
+          workspaceId: wsId,
+          unreadCount: 0,
+          lastReadAt: new Date(),
+        },
+      });
+
       res.status(201).json(member);
     } catch (error) {
       console.error("워크스페이스 멤버 초대 오류:", error);
@@ -340,6 +385,16 @@ router.post(
             select: { id: true, nickname: true, avatar: true, email: true },
           },
           workspace: { select: { id: true, name: true } },
+        },
+      });
+
+      // 새 멤버의 채팅 알림 레코드 생성
+      await prisma.chatNotification.create({
+        data: {
+          userId: targetUser.id,
+          workspaceId: wsId,
+          unreadCount: 0,
+          lastReadAt: new Date(),
         },
       });
 
@@ -431,7 +486,17 @@ router.delete(
         return res.status(404).json({ error: "멤버를 찾을 수 없습니다" });
       }
 
+      // 멤버 제거
       await prisma.workspaceMember.delete({ where: { id: member.id } });
+
+      // 해당 사용자의 채팅 알림 레코드 삭제
+      await prisma.chatNotification.deleteMany({
+        where: {
+          userId: user_id,
+          workspaceId: wsId,
+        },
+      });
+
       res.status(204).send();
     } catch (error) {
       console.error("워크스페이스 멤버 제거 오류:", error);
