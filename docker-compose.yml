@@ -64,7 +64,6 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
-      - node_modules:/app/node_modules
     networks:
       - team_network
     command: >
