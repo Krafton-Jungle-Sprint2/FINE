@@ -25,9 +25,6 @@
     "db:seed": "node src/seed.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "prisma": {
-    "seed": "node prisma/seed.js"
-  },
   "keywords": [
     "express",
     "socket.io",

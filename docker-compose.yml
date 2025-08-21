@@ -71,7 +71,6 @@ services:
         echo 'Waiting for database to be ready...' &&
         sleep 5 &&
         npx prisma generate &&
-        npx prisma migrate deploy &&
         echo 'Starting application...' &&
         node src/index.js
       "
