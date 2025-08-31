@@ -39,9 +39,9 @@ services:
     restart: unless-stopped
     environment:
       TZ: Asia/Seoul
-      DATABASE_URL: "mysql://teamuser:teampassword@localhost:3307/team_collaboration_dev"
-      # ✅ dev는 shadow를 root로 두어 권한 문제 방지
-      SHADOW_DATABASE_URL: "mysql://root:rootpassword@localhost:3306/team_collaboration_shadow_dev"
+      # ⚠️ 컨테이너 내부에서는 mysql:3306 으로 접속
+      DATABASE_URL: "mysql://teamuser:teampassword@mysql:3306/team_collaboration_dev"
+      SHADOW_DATABASE_URL: "mysql://root:rootpassword@mysql:3306/team_collaboration_shadow_dev"
       JWT_SECRET: "dev_jwt_secret_12345678901234567890123456789012"
       ACCESS_TOKEN_SECRET: "dev_access_secret_abcdefghijklmnopqrstuvwxyz1234"
       REFRESH_TOKEN_SECRET: "dev_refresh_secret_abcdefghijklmnopqrstuvwxyz5678"
@@ -54,7 +54,7 @@ services:
     ports:
       - "4000:4000"
       - "5000:5000"
-      - "9229:9229" # Node --inspect 포트
+      - "9229:9229"
     depends_on:
       mysql:
         condition: service_healthy
@@ -78,7 +78,8 @@ services:
     working_dir: /app
     environment:
       TZ: Asia/Seoul
-      DATABASE_URL: "mysql://teamuser:teampassword@localhost:3306/team_collaboration_dev"
+      # ⚠️ 여기서도 mysql:3306
+      DATABASE_URL: "mysql://teamuser:teampassword@mysql:3306/team_collaboration_dev"
       NODE_ENV: "development"
     volumes:
       - ./backend:/app
@@ -92,12 +93,7 @@ services:
         condition: service_healthy
       backend:
         condition: service_started
-    command:
-      [
-        "sh",
-        "-lc",
-        "exec npx prisma studio --port 5555 --hostname 0.0.0.0 --browser none",
-      ]
+    command: ["npx","prisma","studio","--port","5555","--hostname","0.0.0.0","--browser","none","--schema","prisma/schema.prisma"]
     logging:
       driver: "json-file"
       options:

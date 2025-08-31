@@ -114,13 +114,10 @@ router.get(
       const workspace = await prisma.workspace.findUnique({
         where: { id: wsId },
         include: {
-          owner: { select: { id: true, nickname: true, avatar: true } },
-          members: {
-            include: {
-              user: { select: { id: true, nickname: true, avatar: true } },
-            },
+          owner: {
+            select: { id: true, nickname: true, avatar: true, email: true },
           },
-          _count: { select: { tasks: true } },
+          _count: { select: { members: true, tasks: true } },
           chatNotifications: {
             where: { userId: userId },
             select: { unreadCount: true },
@@ -230,6 +227,8 @@ router.get(
 
       const result = [
         {
+          id: `owner:${wsId}:${workspace.owner.id}`,
+          userId: workspace.owner.id,
           user: workspace.owner,
           accepted: true,
           joinedAt: workspace.createdAt,

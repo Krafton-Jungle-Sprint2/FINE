@@ -3,18 +3,17 @@ services:
     image: mysql:8.0
     restart: unless-stopped
     environment:
-      TZ: Asia/Seoul
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: team_collaboration
-      MYSQL_USER: teamuser
-      MYSQL_PASSWORD: teampassword
+      TZ: ${TZ}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     ports:
-      - "3307:3306"
+      - "${MYSQL_PORT}:3306"      # 호스트:컨테이너(내부는 항상 3306)
     volumes:
-      - mysql_data:/var/lib/mysql
+      - mysql_dev_data:/var/lib/mysql
       - ./mysql-init:/docker-entrypoint-initdb.d
-    networks:
-      - team_network
+    networks: [team_network_dev]
     command: >
       --default-authentication-plugin=mysql_native_password
       --character-set-server=utf8mb4
@@ -22,11 +21,7 @@ services:
       --general-log=1
       --general-log-file=/var/lib/mysql/general.log
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -prootpassword",
-        ]
+      test: ["CMD-SHELL","mysqladmin ping -h 127.0.0.1 -P 3306 -u${MYSQL_ROOT_USER} -p${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -35,46 +30,34 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      target: production
+      target: development
     restart: unless-stopped
+    env_file:
+      - ./backend/.env.app           # 앱 시크릿
     environment:
-      TZ: Asia/Seoul
-      DATABASE_URL: "mysql://teamuser:teampassword@mysql:3306/team_collaboration"
-      # ✅ dev는 shadow를 root로 두어 권한 문제 방지
-      SHADOW_DATABASE_URL: "mysql://root:rootpassword@mysql:3306/team_collaboration_shadow"
-      JWT_SECRET: "pro_jwt_secret_12345678901234567890123456789012"
-      ACCESS_TOKEN_SECRET: "pro_access_secret_abcdefghijklmnopqrstuvwxyz1234"
-      REFRESH_TOKEN_SECRET: "pro_refresh_secret_abcdefghijklmnopqrstuvwxyz5678"
-      ACCESS_TOKEN_EXPIRY: "15m"
-      REFRESH_TOKEN_EXPIRY: "7d"
-      API_PORT: "4000"
-      SOCKET_PORT: "5000"
-      NODE_ENV: "promotion"
-      FRONTEND_URL: "http://localhost:5173"
+      TZ: ${TZ}
+      # 컨테이너 내부 DB 연결은 항상 서비스명:3306
+      DATABASE_URL: "mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@${MYSQL_HOST}:${MYSQL_INTERNAL_PORT}/${MYSQL_DATABASE}"
+      SHADOW_DATABASE_URL: "mysql://${MYSQL_ROOT_USER}:${MYSQL_ROOT_PASSWORD}@${MYSQL_HOST}:${MYSQL_INTERNAL_PORT}/${MYSQL_SHADOW_DATABASE}"
+      API_PORT: "${API_PORT}"
+      SOCKET_PORT: "${SOCKET_PORT}"
+      NODE_ENV: "development"
+      FRONTEND_URL: "${FRONTEND_URL}"
     ports:
-      - "4000:4000"
-      - "5000:5000"
-      - "9229:9229" # Node --inspect 포트
+      - "${API_PORT}:4000"
+      - "${SOCKET_PORT}:5000"
+      - "${INSPECT_PORT}:9229"
     depends_on:
       mysql:
         condition: service_healthy
     volumes:
       - ./backend:/app
-      - node_modules:/app/node_modules
-    networks:
-      - team_network
-    command: >
-      sh -lc "
-        echo '🔄 DB migrate...' &&
-        npx prisma migrate dev --name init &&
-        echo '🚀 start dev server' &&
-        npm run dev
-      "
+      - node_modules_dev:/app/node_modules
+    networks: [team_network_dev]
+    command: npm run dev
     logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
 
   prisma-studio:
     build:
@@ -82,46 +65,39 @@ services:
       dockerfile: Dockerfile
       target: development
     working_dir: /app
+    env_file:
+      - ./backend/.env.app
     environment:
-      TZ: Asia/Seoul
-      DATABASE_URL: "mysql://teamuser:teampassword@mysql:3306/team_collaboration"
-      NODE_ENV: "promotion"
+      TZ: ${TZ}
+      DATABASE_URL: "mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@${MYSQL_HOST}:${MYSQL_INTERNAL_PORT}/${MYSQL_DATABASE}"
+      NODE_ENV: "development"
     volumes:
       - ./backend:/app
-      - node_modules:/app/node_modules
+      - node_modules_dev:/app/node_modules
     ports:
-      - "5555:5555"
-    networks:
-      - team_network
+      - "${PRISMA_STUDIO_PORT}:5555"
+    networks: [team_network_dev]
     depends_on:
       mysql:
         condition: service_healthy
       backend:
         condition: service_started
-    command:
-      [
-        "sh",
-        "-lc",
-        "exec npx prisma studio --port 5555 --hostname 0.0.0.0 --browser none",
-      ]
+    command: ["sh","-lc","exec npx prisma studio --port 5555 --hostname 0.0.0.0 --browser none"]
     logging:
-      driver: "json-file"
-      options:
-        max-size: "5m"
-        max-file: "2"
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
 
   redis:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT}:6379"
     volumes:
-      - redis_data:/data
-    networks:
-      - team_network
+      - redis_dev_data:/data
+    networks: [team_network_dev]
     command: redis-server --appendonly yes
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD","redis-cli","ping"]
       interval: 10s
       timeout: 3s
       retries: 3
